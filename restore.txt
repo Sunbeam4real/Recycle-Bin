@@ -1,0 +1,41 @@
+#!/bin/bash
+
+#check is the file exists
+
+if [ ! -e $HOME/deleted/$1 ]; then
+   echo "$0: cannot restore \`$1': No such file or directory"
+   exit 8
+fi
+
+#check if the filename is provided
+
+if [ $# = 0 ]; then
+   echo "$0: missing operand"
+   exit 9
+fi
+
+#get the original name and path of file being restored
+
+tempname=$(grep $1 $HOME/.restore.info|cut -d ":" -f1)
+temppath=$(grep $1 $HOME/.restore.info|cut -d":" -f2)
+
+#get the dirname of temppath
+dirpath=$(dirname $temppath)
+
+
+#check if the file being restored already exists in the target directory
+
+if [ -e $temppath ]; then
+   read -p "Do you want to overwrite? y/n " opt
+   case $opt in
+      [yY]|yes) mv $HOME/deleted/$1 $temppath
+                grep -v $1 $HOME/.restore.info > $HOME/project/restore.temp
+                mv $HOME/project/restore.temp $HOME/.restore.info;;
+      *) echo "restored failed because file already exists";;
+   esac
+else
+   mkdir -p $dirpath
+   mv $HOME/deleted/$1 $temppath
+   grep -v $1 $HOME/.restore.info > $HOME/restore.temp
+   mv $HOME/restore.temp $HOME/.restore.info
+fi

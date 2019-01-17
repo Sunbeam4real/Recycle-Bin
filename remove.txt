@@ -1,0 +1,116 @@
+#!/bin/bash
+
+#global vairables
+i_opt=0
+v_opt=0
+r_opt=0
+remove_node=$(ls -i $HOME/project/remove|cut -d" " -f1)
+restore_node=$(ls -i $HOME/project/restore|cut -d" " -f1)
+
+#function to get the new name of our file in recycle bin
+
+function rename_it() {
+   newhead=$(basename $1)
+   newtail=$(ls -i $1|cut -d" " -f1)
+   newname=$newhead'_'$newtail
+   echo "$newname"
+}
+
+#function to pass the removed filename to .restore.info
+
+function restoreinfo() {
+   pname=$(readlink -f $1)
+   infoline=$(rename_it $1)':'$pname
+   echo "$infoline" >> $HOME/.restore.info
+}
+
+#function to remove a file, we firstly record the filename to
+#restore.info, then we move it to deleted folder
+
+function move_pls() {
+   $(restoreinfo $1)
+   mv $1 $HOME/deleted/$(rename_it $1)
+}
+
+#function to perform the -r action, to remove a directory
+
+function remove_dir() {
+   var=$(find $1 -type f)
+   for i in $var
+   do
+        $(move_pls $i)
+   done
+   rm -r $1
+}
+
+
+#set the i_opt and v_opt
+while getopts vir opt
+   do
+      case $opt in
+         i) i_opt=1;;
+         v) v_opt=1;;
+         r) r_opt=1;;
+         *) echo "invalid option"
+            exit 11;;
+      esac
+   done
+
+shift $(($OPTIND - 1))
+
+#check if filename given
+if [ $# = 0 ]; then
+   echo "$0: missing operand"
+   exit 8
+fi
+
+for i in $*
+do
+#check if recycle bin already exsits, create one if not exist
+   if [ -f $HOME/deleted ]; then
+      rm $HOME/deleted
+   fi
+   if [ ! -d $HOME/deleted ]; then
+      mkdir $HOME/deleted
+   fi
+#test for error conditions
+   if [ ! -e $i ]; then
+      echo "$0: cannot remove '$i': No such file or directory"
+      continue
+   fi
+#check if the argument is a directory instead of a file
+   if [[ -d $i && $r_opt -eq 0 ]]; then
+      echo "$0: cannot remove '$i': Is a directory"
+      continue
+   fi
+#check the file we will remove is not remove itself
+   tempnode=$(ls -i $i|cut -d" " -f1)
+   if [[ $tempnode = $remove_node || $tempnode = $restore_node ]]; then
+      echo "Attempting to delete remove-operation aborted"
+      exit 9
+   fi
+#check is restore info exists, if not create a new one
+   if [ ! -e $HOME/.restore.info ]; then
+      touch $HOME/.restore.info
+   fi
+
+#the main body of remove
+   if [ $i_opt = 1 ]; then
+         read -p "$0: remove regular file \`$i'? " oops
+                case $oops in
+                        [yY]|yes) ;;
+                                  #echo "removed '$i'";;
+                        *) continue;;
+                esac
+   fi
+   if [ $v_opt = 1 ]; then
+        $(move_pls $i)
+        echo "removed '$i'"
+        continue
+   fi
+   if [[ -d $i && $r_opt = 1 ]]; then
+        $(remove_dir $i)
+   else
+      $(move_pls $i)
+   fi
+done
